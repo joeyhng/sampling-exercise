@@ -3,6 +3,7 @@ import math
 import random
 from matplotlib.pylab import *
 from matplotlib.patches import Ellipse
+from scipy.special import gamma
 
 K = 2
 
@@ -29,17 +30,43 @@ def sample(prob):
             return i
 
 def predictive(xi, X):
-#    print '-----------'
-#    print 'X shape = ' , X.shape
     X = np.mat(X)
+    n = X.shape[0]
+    d = X.shape[1]
+    '''
     mu = X.mean(axis=0)
-    cov = 1./X.shape[0] * (X - np.tile(mu, (X.shape[0], 1))).T * (X - np.tile(mu, (X.shape[0], 1)))
-#    print 'mu: ', mu
-#    print 'cov: ', cov
-#    print np.linalg.det(2 * np.pi * cov)
+    cov = 1./n * (X - np.tile(mu, (n, 1))).T * (X - np.tile(mu, (n, 1)))
     norm_const = np.linalg.det(2 * np.pi * cov) ** (-0.5)
     return norm_const * np.exp(-0.5 * (xi-mu) * cov.I * (xi-mu).T)
+    '''
+    mu = X.mean(axis=0)
+    cov = 1./n * (X - np.tile(mu, (n, 1))).T * (X - np.tile(mu, (n, 1)))
+
+    mu0 = np.array([0,0])
+    k0 = 1
+    v0 = 2
+    cov0 = np.eye(2) * 5
+
+    kn = k0 + 1
+    vn = v0 + n
+    mun = (k0*mu0 + n*mu) / kn 
+    covn = cov0 + cov + k0*n / (k0 + n) * (mu - mu0) * (mu - mu0).T
+
+    def student_t(x, v, mu, cov):
+        v = float(v)
+        d = float(mu.shape[0])
+        cov = np.mat(cov)
+        print '!!!', (np.linalg.det(cov) ** -.5) / ((v*np.pi) ** (d/2)) 
+        print x.shape, mu.shape, (x-mu).shape
+        print ((x-mu)*cov.I*(x-mu).T)[0,0]
+        print '~~~', math.pow(1 + 1./v * ((x-mu)*cov.I*(x-mu).T)[0,0], -(x+d)/2)
+        return gamma(v/2 + d/2) / gamma(v/2) * \
+               (np.linalg.det(cov) ** -.5) / ((v*np.pi) ** (d/2)) * \
+               (1 + 1./v * (x-mu).T*cov.I*(x-mu))**(-(x+d)/2)
+
+    return student_t(xi, vn-d+1, mun, covn*(kn+1) / (kn*(vn-d+1)))
     
+
 def gibbs_sampling(X):
     N = X.shape[0]
     k = 2
@@ -56,7 +83,7 @@ def gibbs_sampling(X):
                 prob[t] *= predictive(X[i], X[np.nonzero(z == t)[0], :])
             prob /= prob.sum()
             z[i] = sample(prob)
-        if it % 10 == 0:
+        if it % 20 == 0:
             visualize_data(X, None, None, z=z)
     return z
 
